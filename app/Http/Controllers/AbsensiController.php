@@ -19,11 +19,11 @@ class AbsensiController extends Controller
     public function dashboard()
     {
         // == PERUBAHAN DI BARIS INI ==
-        $total_karyawan = Karyawan::count(); 
-        
+        $total_karyawan = Karyawan::count();
+
         $hadir_hari_ini = Absensi::whereDate('work_date', Carbon::today())->distinct('personnel_number')->count();
         $event_hari_ini = Absensi::whereDate('work_date', Carbon::today())->count();
-        
+
         return view('dashboard', [
             'total_karyawan' => $total_karyawan,
             'hadir_hari_ini' => $hadir_hari_ini,
@@ -38,8 +38,8 @@ class AbsensiController extends Controller
     public function index()
     {
         $data_absensi = Absensi::orderBy('work_date', 'desc')
-                               ->orderBy('clock_in', 'desc')
-                               ->paginate(50);
+            ->orderBy('clock_in', 'desc')
+            ->paginate(50);
 
         return view('absensi.index', compact('data_absensi'));
     }
@@ -84,7 +84,8 @@ class AbsensiController extends Controller
         $log_dimasukkan = 0;
 
         foreach ($logs as $log) {
-            if (!isset($log['user_id'])) continue;
+            if (!isset($log['user_id']))
+                continue;
 
             $karyawan = Karyawan::where('nomor_karyawan', $log['user_id'])->first();
 
@@ -92,18 +93,18 @@ class AbsensiController extends Controller
                 $waktu_absen = Carbon::parse($log['timestamp']);
 
                 $absen_ada = Absensi::where('nomor_karyawan', $karyawan->nomor_karyawan)
-                                    ->where('clock_in', $waktu_absen->toDateTimeString())
-                                    ->exists();
+                    ->where('clock_in', $waktu_absen->toDateTimeString())
+                    ->exists();
 
                 if (!$absen_ada) {
                     Absensi::create([
                         'personnel_number' => $karyawan->nomor_karyawan,
-                        'personnel_name'   => $karyawan->nama_karyawan,
-                        'work_date'        => $waktu_absen->toDateString(),
-                        'clock_in'         => $waktu_absen,
-                        'status_masuk'     => 'Tepat Waktu',
-                        'shift'            => $karyawan->shift ?? 1,
-                        'work_duration'    => '0 menit',
+                        'personnel_name' => $karyawan->nama_karyawan,
+                        'work_date' => $waktu_absen->toDateString(),
+                        'clock_in' => $waktu_absen,
+                        'status_masuk' => 'Tepat Waktu',
+                        'shift' => $karyawan->shift ?? 1,
+                        'work_duration' => '0 menit',
                     ]);
                     $log_dimasukkan++;
                 }
@@ -114,5 +115,44 @@ class AbsensiController extends Controller
             'success' => true,
             'message' => "Proses Selesai. $log_dimasukkan log absensi baru berhasil dimasukkan ke database."
         ]);
+    }
+
+    public function logEvent(Request $request)
+    {
+        $log = $request->all();
+
+        if (empty($log['user_id'])) {
+            return response()->json(['message' => 'User ID tidak ada.'], 400);
+        }
+
+        // Cari karyawan berdasarkan nomor ID dari mesin
+        $karyawan = Karyawan::where('nomor_karyawan', $log['user_id'])->first();
+
+        if ($karyawan) {
+            $waktu_absen = Carbon::parse($log['timestamp']);
+
+            // Cek apakah log dengan waktu yang sama persis sudah ada untuk menghindari duplikat
+            $absen_ada = Absensi::where('personnel_number', $karyawan->nomor_karyawan)
+                ->where('clock_in', $waktu_absen->toDateTimeString())
+                ->exists();
+
+            if (!$absen_ada) {
+                Absensi::create([
+                    'personnel_number' => $karyawan->nomor_karyawan,
+                    'personnel_name' => $karyawan->nama_karyawan,
+                    'work_date' => $waktu_absen->toDateString(),
+                    'clock_in' => $waktu_absen,
+                    'status_masuk' => 'Tepat Waktu', // Logika ini bisa disesuaikan nanti
+                    'shift' => $karyawan->shift ?? 1,
+                    'work_duration' => '0 menit', // Logika ini bisa disesuaikan nanti
+                ]);
+
+                // Jika perlu, di sini bisa ditambahkan logika untuk update clock_out
+
+                return response()->json(['message' => 'Log berhasil disimpan.']);
+            }
+            return response()->json(['message' => 'Log duplikat, diabaikan.'], 208);
+        }
+        return response()->json(['message' => 'Karyawan tidak ditemukan.'], 404);
     }
 }
